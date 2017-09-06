@@ -8,10 +8,17 @@ using vJoyInterfaceWrap;
 using LibUsbDotNet;
 using LibUsbDotNet.Main;
 
+
 namespace Xbox360WirelessChatpad
 {
+
     class Controller
     {
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        public static extern void mouse_event(int dwFlags, int dx, int dy, int dwData, int dwExtraInfo);
+
+
         // Tracks if the Wireless Controller is attached
         public bool controllerAttached = false;
 
@@ -165,7 +172,7 @@ namespace Xbox360WirelessChatpad
         // be used by a higher level timer function to continually hold
         // down an arrow key, allowing for scrolling or other fast navigation.
         // 0 = Neutral, 
-        private int rightStickDir;
+        private short rightStickX, rightStickY;
 
         // Special Command booleans used to detect when special button
         // combinations are pressed
@@ -176,6 +183,12 @@ namespace Xbox360WirelessChatpad
         // Only used in Mouse Mode.
         private bool leftButtonDown = false;
         private bool rightButtonDown = false;
+        private bool startButtonDown = false;
+        private bool backButtonDown = false;
+        private bool guideButtonDown = false;
+        private bool lBumperButtonDown = false;
+        private bool rBumperButtonDown = false;
+        private bool rTriggerButtonDown = false;
 
         private bool navActive = false;
 
@@ -404,6 +417,8 @@ namespace Xbox360WirelessChatpad
                     // Toggle Capslock Modifier based on Orange and Shift Modifiers
                     if (chatpadMod["Orange"] && chatpadMod["Shift"])
                         chatpadMod["Capslock"] = !chatpadMod["Capslock"];
+                    else
+                        chatpadMod["Orange"] = chatpadMod["Orange"] || chatpadMod["Shift"];
 
                     // Set LEDs based on Modifiers
                     // Turning the LEDs on.
@@ -453,10 +468,6 @@ namespace Xbox360WirelessChatpad
                     // Set the Upper-Case flag and Shift Key status based on the
                     // XOR of Shift and Capslock Modifiers.
                     flagUpperCase = chatpadMod["Shift"] ^ chatpadMod["Capslock"];
-                    if (flagUpperCase)
-                        Keyboard.KeyDown(Keys.LShiftKey);
-                    else
-                        Keyboard.KeyUp(Keys.LShiftKey);
 
                     // Set the Tab Key status based on the Messenger Modifier.
                     if (chatpadMod["Messenger"])
@@ -523,36 +534,64 @@ namespace Xbox360WirelessChatpad
             // Directional Pad Processing
             // --------------------------
 
-            // Set the POV hat based on the currently held direction
-            switch (dataPacket[6])
+            if (mouseModeFlag)
             {
-                case 0x01:
-                    vJoyInt.SetContPov(directionMap["Up"], (uint)controllerNumber, 1);
-                    break;
-                case 0x02:
-                    vJoyInt.SetContPov(directionMap["Down"], (uint)controllerNumber, 1);
-                    break;
-                case 0x04:
-                    vJoyInt.SetContPov(directionMap["Left"], (uint)controllerNumber, 1);
-                    break;
-                case 0x08:
-                    vJoyInt.SetContPov(directionMap["Right"], (uint)controllerNumber, 1);
-                    break;
-                case 0x05:
-                    vJoyInt.SetContPov(directionMap["UpLeft"], (uint)controllerNumber, 1);
-                    break;
-                case 0x06:
-                    vJoyInt.SetContPov(directionMap["DownLeft"], (uint)controllerNumber, 1);
-                    break;
-                case 0x09:
-                    vJoyInt.SetContPov(directionMap["UpRight"], (uint)controllerNumber, 1);
-                    break;
-                case 0x0A:
-                    vJoyInt.SetContPov(directionMap["DownRight"], (uint)controllerNumber, 1);
-                    break;
-                default:
-                    vJoyInt.SetContPov(directionMap["Neutral"], (uint)controllerNumber, 1);
-                    break;
+                // Set the POV hat based on the currently held direction
+                switch (dataPacket[6])
+                {
+                    case 0x01:
+                        Keyboard.KeyDown(Keys.Up);
+                        Keyboard.KeyUp(Keys.Up);
+                        break;
+                    case 0x02:
+                        Keyboard.KeyDown(Keys.Down);
+                        Keyboard.KeyUp(Keys.Down);
+                        break;
+                    case 0x04:
+                        Keyboard.KeyDown(Keys.Left);
+                        Keyboard.KeyUp(Keys.Left);
+                        break;
+                    case 0x08:
+                        Keyboard.KeyDown(Keys.Right);
+                        Keyboard.KeyUp(Keys.Right);
+                        break;
+                    default:
+                        break;
+                }
+            }
+            else
+            {
+                // Set the POV hat based on the currently held direction
+                switch (dataPacket[6])
+                {
+                    case 0x01:
+                        vJoyInt.SetContPov(directionMap["Up"], (uint)controllerNumber, 1);
+                        break;
+                    case 0x02:
+                        vJoyInt.SetContPov(directionMap["Down"], (uint)controllerNumber, 1);
+                        break;
+                    case 0x04:
+                        vJoyInt.SetContPov(directionMap["Left"], (uint)controllerNumber, 1);
+                        break;
+                    case 0x08:
+                        vJoyInt.SetContPov(directionMap["Right"], (uint)controllerNumber, 1);
+                        break;
+                    case 0x05:
+                        vJoyInt.SetContPov(directionMap["UpLeft"], (uint)controllerNumber, 1);
+                        break;
+                    case 0x06:
+                        vJoyInt.SetContPov(directionMap["DownLeft"], (uint)controllerNumber, 1);
+                        break;
+                    case 0x09:
+                        vJoyInt.SetContPov(directionMap["UpRight"], (uint)controllerNumber, 1);
+                        break;
+                    case 0x0A:
+                        vJoyInt.SetContPov(directionMap["DownRight"], (uint)controllerNumber, 1);
+                        break;
+                    default:
+                        vJoyInt.SetContPov(directionMap["Neutral"], (uint)controllerNumber, 1);
+                        break;
+                }
             }
 
             // -----------------
@@ -601,44 +640,87 @@ namespace Xbox360WirelessChatpad
                         rightButtonDown = false;
                     }
                 }
+
+                // start - enter
+                if ( (dataPacket[6] & 0x10) > 0 && !startButtonDown )
+                {
+                    Keyboard.KeyDown(Keys.Enter);
+                    startButtonDown = true;
+                }
+                else if ( (dataPacket[6] & 0x10) == 0 && startButtonDown )
+                {
+                    Keyboard.KeyUp(Keys.Enter);
+                    startButtonDown = false;
+                }
+
+                // back - escape
+                if ( (dataPacket[6] & 0x20) > 0 && !backButtonDown )
+                {
+                    Keyboard.KeyDown(Keys.Escape);
+                    backButtonDown = true;
+                }
+                else if ( (dataPacket[6] & 0x20) == 0 && backButtonDown )
+                {
+                    Keyboard.KeyUp(Keys.Escape);
+                    backButtonDown = false;
+                }
+
+                // guide - windows key
+                if ( (dataPacket[7] & 0x04) > 0 && !guideButtonDown )
+                {
+                    Keyboard.KeyDown(Keys.LWin);
+                    guideButtonDown = true;
+                }
+                else if ( (dataPacket[7] & 0x04) == 0 && guideButtonDown )
+                {
+                    Keyboard.KeyUp(Keys.LWin);
+                    guideButtonDown = false;
+                }
+
             }
             else
             {
                 vJoyInt.SetBtn((dataPacket[7] & 0x10) > 0, (uint)controllerNumber, buttonMap["A"]);
                 vJoyInt.SetBtn((dataPacket[7] & 0x20) > 0, (uint)controllerNumber, buttonMap["B"]);
+                vJoyInt.SetBtn((dataPacket[6] & 0x10) > 0, (uint)controllerNumber, buttonMap["Start"]);
+                vJoyInt.SetBtn((dataPacket[6] & 0x20) > 0, (uint)controllerNumber, buttonMap["Back"]);
+                vJoyInt.SetBtn((dataPacket[7] & 0x04) > 0, (uint)controllerNumber, buttonMap["Guide"]);
             }
 
             vJoyInt.SetBtn((dataPacket[7] & 0x40) > 0, (uint)controllerNumber, buttonMap["X"]);
             vJoyInt.SetBtn((dataPacket[7] & 0x80) > 0, (uint)controllerNumber, buttonMap["Y"]);
-            vJoyInt.SetBtn((dataPacket[6] & 0x10) > 0, (uint)controllerNumber, buttonMap["Start"]);
-            vJoyInt.SetBtn((dataPacket[6] & 0x20) > 0, (uint)controllerNumber, buttonMap["Back"]);
             vJoyInt.SetBtn((dataPacket[6] & 0x40) > 0, (uint)controllerNumber, buttonMap["LStick"]);
             vJoyInt.SetBtn((dataPacket[6] & 0x80) > 0, (uint)controllerNumber, buttonMap["RStick"]);
-            vJoyInt.SetBtn((dataPacket[7] & 0x04) > 0, (uint)controllerNumber, buttonMap["Guide"]);
 
             // If in mouse mode use Left and Rught bumpers as navigationg shortcuts;
             // otherwise set joystick buttons.
             if (mouseModeFlag)
             {
-                // Left Bumper - Navigate Back
-                if ((dataPacket[7] & 0x01) > 0 && !navActive)
+                // Left Bumper - Alt
+                if ( (dataPacket[7] & 0x01) > 0 && !lBumperButtonDown )
                 {
-                    navActive = true;
                     Keyboard.KeyDown(Keys.LMenu);
-                    Keyboard.KeyDown(Keys.Left);
-                    Keyboard.KeyUp(Keys.Left);
+                    lBumperButtonDown = true;
+                }
+                else if ( (dataPacket[7] & 0x01) == 0 && lBumperButtonDown )
+                {
                     Keyboard.KeyUp(Keys.LMenu);
+                    lBumperButtonDown = false;
                 }
 
-                // Right Bumper - Navigate Forward
-                if ((dataPacket[7] & 0x02) > 0 && !navActive)
+                // Right Bumper - Shift
+                if ( (dataPacket[7] & 0x02) > 0 && !rBumperButtonDown )
                 {
-                    navActive = true;
-                    Keyboard.KeyDown(Keys.LMenu);
-                    Keyboard.KeyDown(Keys.Right);
-                    Keyboard.KeyUp(Keys.Right);
-                    Keyboard.KeyUp(Keys.LMenu);
+                    rBumperButtonDown = true;
                 }
+                else if ( (dataPacket[7] & 0x02) == 0 && rBumperButtonDown )
+                {
+                    rBumperButtonDown = false;
+                }
+                if (flagUpperCase || rBumperButtonDown)
+                    Keyboard.KeyDown(Keys.LShiftKey);
+                else
+                    Keyboard.KeyUp(Keys.LShiftKey);
             }
             else
             {
@@ -653,10 +735,21 @@ namespace Xbox360WirelessChatpad
             // Record the left stick and right stick X and Y values and left and right trigger values
             short leftX = (short)(dataPacket[10] | (dataPacket[11] << 8));
             short leftY = (short)(dataPacket[12] | (dataPacket[13] << 8));
-            short rightX = (short)(dataPacket[14] | (dataPacket[15] << 8));
-            short rightY = (short)(dataPacket[16] | (dataPacket[17] << 8));
+            rightStickX = (short)(dataPacket[14] | (dataPacket[15] << 8));
+            rightStickY = (short)(dataPacket[16] | (dataPacket[17] << 8));
             int leftTrig = dataPacket[8];
             int rightTrig = dataPacket[9];
+
+            if ( rightTrig >= 50 && !rTriggerButtonDown )
+            {
+                rTriggerButtonDown = true;
+                Keyboard.KeyDown(Keys.LControlKey);
+            }
+            else if ( rightTrig < 50 && rTriggerButtonDown )
+            {
+                rTriggerButtonDown = false;
+                Keyboard.KeyUp(Keys.LControlKey);
+            }
 
             // Filter the left stick X and Y values based on the left circular deadzone
             double leftDistance = Math.Sqrt((double)(leftX * leftX) + (double)(leftY * leftY));
@@ -674,18 +767,18 @@ namespace Xbox360WirelessChatpad
             }
 
             // Filter the right stick X and Y values based on the right circular deadzone
-            double rightDistance = Math.Sqrt((double)(rightX * rightX) + (double)(rightY * rightY));
+            double rightDistance = Math.Sqrt((double)(rightStickX * rightStickX) + (double)(rightStickY * rightStickY));
             if (rightDistance < deadzoneR)
             {
-                rightX = 0;
-                rightY = 0;
+                rightStickX = 0;
+                rightStickY = 0;
             }
             else
             {
-                if (Math.Abs(Convert.ToInt32(rightX)) < deadzoneR)
-                    rightX = 0;
-                if (Math.Abs(Convert.ToInt32(rightY)) < deadzoneR)
-                    rightY = 0;
+                if (Math.Abs(Convert.ToInt32(rightStickX)) < deadzoneR)
+                    rightStickX = 0;
+                if (Math.Abs(Convert.ToInt32(rightStickY)) < deadzoneR)
+                    rightStickY = 0;
             }
 
             // If in Mouse Mode use the left stick and left trigger to determine the movement
@@ -703,14 +796,6 @@ namespace Xbox360WirelessChatpad
                 // the position of the Left stick.
                 mouseVelX = maxVelocity * leftX / 32767;
                 mouseVelY = maxVelocity * leftY / 32767;
-
-                // Sets the right stick direction based on the Y position of the Right stick.
-                if (rightY < 0)
-                    rightStickDir = -1;
-                else if (rightY > 0)
-                    rightStickDir = 1;
-                else
-                    rightStickDir = 0;
             }
             else
             {
@@ -720,8 +805,8 @@ namespace Xbox360WirelessChatpad
                 vJoyInt.SetAxis(-leftY, (uint)controllerNumber, axisMap["LY"]);
 
                 // Set the right stick X and Y values
-                vJoyInt.SetAxis(rightX, (uint)controllerNumber, axisMap["RX"]);
-                vJoyInt.SetAxis(rightY, (uint)controllerNumber, axisMap["RY"]);
+                vJoyInt.SetAxis(rightStickX, (uint)controllerNumber, axisMap["RX"]);
+                vJoyInt.SetAxis(rightStickY, (uint)controllerNumber, axisMap["RY"]);
 
                 // If in FFXIV Mode the Left and Right Triggers are buttons otherwise
                 // they are separate axes.
@@ -1192,10 +1277,23 @@ namespace Xbox360WirelessChatpad
                 // keep the cursor speed fluid while still having a usable scroll speed.
                 if (tickCount == 4)
                 {
-                    if (rightStickDir == -1)
-                        Mouse.Scroll(Mouse.ScrollDirection.Down);
-                    else if (rightStickDir == 1)
-                        Mouse.Scroll(Mouse.ScrollDirection.Up);
+                    if (rightStickX / 32767 < -0.5)
+                        mouse_event(0x1000, 0, 0, -100, 0);
+                    else if (rightStickX < 0)
+                        mouse_event(0x1000, 0, 0, -50, 0);
+                    else if (rightStickX / 32767 > 0.5)
+                        mouse_event(0x1000, 0, 0, 100, 0);
+                    else if (rightStickX > 0)
+                        mouse_event(0x1000, 0, 0, 50, 0);
+
+                    if (rightStickY / 32767 < -0.5)
+                        mouse_event(0x0800, 0, 0, -100, 0);
+                    else if (rightStickY < 0)
+                        mouse_event(0x0800, 0, 0, -50, 0);
+                    else if (rightStickY / 32767 > 0.5)
+                        mouse_event(0x0800, 0, 0, 100, 0);
+                    else if (rightStickY > 0)
+                        mouse_event(0x0800, 0, 0, 50, 0);
 
                     tickCount = 0;
                 }
